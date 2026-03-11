@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Monitoring - P4OP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        body { background-color: #f8fafc; font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
+                /* Supaya tabel tidak pecah di HP */
+        .overflow-y-auto {
+            overflow-x: auto !important; /* Tambahkan scroll horizontal */
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Biar teks universitas gak maksa satu baris (jadi gak kepanjangan) */
+        .break-words {
+            word-break: break-word;
+            min-width: 120px; /* Minimal lebar nama kampus */
+            line-height: 1.2;
+        }
+
+        /* Ukuran khusus HP supaya angkanya gak tabrakan */
+        @media (max-width: 640px) {
+            th, td {
+                padding: 4px 6px !important;
+                font-size: 10px !important;
+            }
+            .w-16 { width: 45px !important; }
+            .w-20 { width: 55px !important; }
+        }
+        
+        .ts-wrapper .ts-control { border-radius: 0.75rem !important; padding: 0 12px 0 45px !important; border: 1px solid #e2e8f0 !important; min-height: 52px !important; display: flex; align-items: center; font-size: 15px !important; }
+        .search-container { position: relative; }
+        .search-container::before { content: ""; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; z-index: 10; pointer-events: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' /%3E%3C/svg%3E"); background-repeat: no-repeat; }
+        
+        /*@media (max-width: 1024px) { 
+            thead { display: none; } 
+            tr { display: block; margin-bottom: 1rem; border: 1px solid #e2e8f0; border-radius: 1rem; background: white; padding: 1rem; } 
+            td { display: flex; justify-content: space-between; align-items: center; border: none !important; padding: 0.5rem 0 !important; text-align: right !important; width: 100% !important; } 
+            td::before { content: attr(data-label); font-weight: 800; text-transform: uppercase; font-size: 10px; color: #94a3b8; text-align: left; } 
+        }*/
+
+        /* Cari dan hapus bagian ini: */
+       table { table-layout: auto; width: 100%; border-collapse: collapse; }
+th { vertical-align: middle !important; text-align: center !important; font-size: 12px !important; }
+
+/* Ini buat tabel utama yang di bawah tetap lega */
+#main-data-table td { 
+    vertical-align: middle !important; 
+    word-wrap: break-word; 
+    padding: 6px 10px !important; 
+    font-size: 14px !important; 
+}
+
+/* Ini KHUSUS buat 2 box status yang mau Mas bikin rapat */
+.max-h-\[500px\] td { 
+    vertical-align: middle !important; 
+    padding: 4px 8px !important; 
+    font-size: 11px !important;
+}
+        
+        .w-no { width: 50px; }
+        .w-mhs { width: 20%; }
+        .w-univ { width: 18%; }
+        .w-prodi { width: 15%; }
+        .w-jenis { width: 10%; }
+        .w-stat { width: 13%; }
+        #count-upload, #count-pimpinan, #count-kampus, #count-disdik {
+            letter-spacing: -0.025em;
+            font-variant-numeric: tabular-nums; /* Biar angka nggak geser-geser pas loading */
+        }
+        /* Overlay loading di tengah layar */
+#global-loader {
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(4px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    transition: opacity 0.3s ease;
+}
+
+/* Animasi Spinner Pop-out */
+.spinner-pop {
+    width: 60px;
+    height: 60px;
+    border: 6px solid #f3f3f3;
+    border-top: 6px solid #1e293b; /* Warna Slate-900 */
+    border-radius: 50%;
+    animation: spin 1s linear infinite, popOut 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes popOut {
+    0% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+    </style>
+</head>
+<body class="antialiased">
+    <div id="global-loader">
+    <div class="spinner-pop"></div>
+    <p class="mt-4 text-slate-900 font-black uppercase tracking-widest text-xs animate-pulse">Memuat Data...</p>
+</div>
+    <div class="max-w-[1600px] mx-auto px-6 py-8">
+        <div class="flex flex-col lg:flex-row justify-between items-center gap-8 mb-10">
+            <div class="flex items-center gap-7 w-full lg:w-auto">
+                <img src="https://i.imgur.com/7QcgJj0.png" alt="Logo" class="hidden lg:block h-20 w-auto object-contain">
+                <div class="mb-10">
+                    <h1 class="text-3xl font-black text-slate-900 tracking-tighter uppercase">
+                        Dashboard Monitoring Pendataan
+                    </h1>
+                    <div class="flex flex-col md:flex-row md:items-center gap-2 mt-1">
+                        <h2 class="text-lg font-bold text-blue-600 uppercase tracking-tight">
+                            Kartu Jakarta Mahasiswa Unggul Tahap 1 Tahun 2026
+                        </h2>
+                        <span class="hidden md:block text-slate-300">|</span>
+                        <span class="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-md">
+                            Data otomatis terupdate setiap 1 jam
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex flex-col md:flex-row gap-4 w-full lg:w-auto">
+                <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm w-full md:w-40 flex flex-col items-center text-center">
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">UPLOAD BERKAS</p>
+                    <span id="percent-upload" class="text-2xl font-black text-emerald-600 mb-3">0.00%</span>
+                    <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                        <div id="bar-upload" class="bg-emerald-500 h-full transition-all duration-1000" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm w-full md:w-40 flex flex-col items-center text-center">
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">VERIFIKASI KAMPUS</p>
+                    <span id="percent-verif" class="text-2xl font-black text-blue-600 mb-3">0.00%</span>
+                    <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                        <div id="bar-verif" class="bg-blue-600 h-full transition-all duration-1000" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-3">
+    
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col">
+        <label class="block text-[20px] font-bold text-slate-700 uppercase tracking-widest mb-3 ml-1">Statistik Pendataan</label>
+        <div class="flex flex-col border border-slate-100 rounded-xl overflow-hidden h-full">
+            <div class="flex justify-between items-center p-2 bg-white border-b border-slate-100">
+                <p class="text-[15px] font-bold text-slate-500 uppercase tracking-wider">Jumlah Penerima</p>
+                <span id="stat-total-mhs" class="text-lg font-black text-slate-900">0</span>
+            </div>
+            <div class="flex justify-between items-center p-2 bg-slate-50/50 border-b border-slate-100">
+                <p class="text-[15px] font-bold text-slate-500 uppercase tracking-wider">Jumlah Perguruan Tinggi</p>
+                <span id="stat-total-univ" class="text-lg font-black text-slate-900">0</span>
+            </div>
+            <div class="flex justify-between items-center p-2 bg-white border-b border-slate-100">
+                <p class="text-[15px] font-bold text-blue-600 uppercase tracking-wider">Jumlah PTN</p>
+                <span id="stat-total-ptn" class="text-lg font-black text-blue-600">0</span>
+            </div>
+            <div class="flex justify-between items-center p-2 bg-slate-50/50">
+                <p class="text-[15px] font-bold text-orange-600 uppercase tracking-wider">Jumlah PTS</p>
+                <span id="stat-total-pts" class="text-lg font-black text-orange-600">0</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col">
+        <label class="block text-[20px] font-bold text-slate-700 uppercase tracking-widest mb-3 ml-1">Status Pendataan</label>
+        <div class="flex flex-col border border-slate-100 rounded-xl overflow-hidden h-full">
+            <div class="flex justify-between items-center p-2 bg-white border-b border-slate-100">
+                <div class="flex items-center gap-3">
+                    <div class="w-2 h-2 rounded-full bg-rose-500"></div>
+                    <p class="text-[15px] font-bold text-slate-600 uppercase tracking-wider">Belum Upload Berkas</p>
+                </div>
+                <span id="count-upload" class="text-lg font-black text-rose-600">0</span>
+            </div>
+            <div class="flex justify-between items-center p-2 bg-slate-50/50 border-b border-slate-100">
+                <div class="flex items-center gap-3">
+                    <div class="w-2 h-2 rounded-full bg-orange-500"></div>
+                    <p class="text-[15px] font-bold text-slate-600 uppercase tracking-wider">Sudah Upload Berkas</p>
+                </div>
+                <span id="count-kampus" class="text-lg font-black text-orange-500">0</span>
+            </div>
+            <div class="flex justify-between items-center p-2 bg-white border-b border-slate-100">
+                <div class="flex items-center gap-3">
+                    <div class="w-2 h-2 rounded-full bg-emerald-500"></div>
+                    <p class="text-[15px] font-bold text-slate-600 uppercase tracking-wider">Belum Verifikasi Kampus</p>
+                </div>
+                <span id="count-pimpinan" class="text-lg font-black text-emerald-600">0</span>
+            </div>
+            <div class="flex justify-between items-center p-2 bg-slate-50/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-2 h-2 rounded-full bg-blue-600"></div>
+                    <p class="text-[15px] font-bold text-slate-600 uppercase tracking-wider">Sudah Verifikasi Kampus</p>
+                </div>
+                <span id="count-disdik" class="text-lg font-black text-blue-600">0</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col h-full">
+    <div class="flex justify-between items-start mb-3">
+        <div>
+            <label class="block text-[20px] font-bold text-slate-700 uppercase tracking-widest ml-1">Jadwal Pendataan</label>
+                </div>
+                <div class="bg-slate-900 text-white px-3 py-1.5 rounded-xl border border-slate-800 flex items-center gap-2">
+                    <div class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></div>
+                    <span id="current-date" class="text-[9px] font-black uppercase tracking-widest"></span>
+                </div>
+            </div>
+            
+            <div class="relative flex-grow space-y-5 pl-6 border-l-2 border-slate-100 ml-2 py-4">
+    
+                <div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div class="absolute -left-[33px] top-1 w-5 h-5 rounded-full border-4 border-white bg-rose-500 shadow-md"></div>
+                    <div>
+                        <p class="text-[9px] font-black text-rose-500 uppercase tracking-widest mb-0.5">No. 1</p>
+                        <h4 class="text-[13px] font-black text-slate-800 leading-tight uppercase">Unggah Berkas Administrasi BANSOS</h4>
+                    </div>
+                    <div class="shrink-0">
+                        <p class="text-[11px] font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 italic whitespace-nowrap">09 Mar – 27 Mar 2026</p>
+                    </div>
+                </div>
+                
+                <div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div class="absolute -left-[33px] top-1 w-5 h-5 rounded-full border-4 border-white bg-orange-500 shadow-md"></div>
+                    <div>
+                        <p class="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-0.5">No. 2</p>
+                        <h4 class="text-[13px] font-black text-slate-800 leading-tight uppercase">Verifikasi Perguruan Tinggi</h4>
+                    </div>
+                    <div class="shrink-0">
+                        <p class="text-[11px] font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 italic whitespace-nowrap">09 Mar – 08 Apr 2026</p>
+                    </div>
+                </div>
+                
+                <div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div class="absolute -left-[33px] top-1 w-5 h-5 rounded-full border-4 border-white bg-blue-600 shadow-md"></div>
+                    <div>
+                        <p class="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-0.5">No. 3</p>
+                        <h4 class="text-[13px] font-black text-slate-800 leading-tight uppercase">Verif Disdik & Penetapan KEPGUB</h4>
+                    </div>
+                    <div class="shrink-0">
+                        <p class="text-[11px] font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 italic whitespace-nowrap">09 Apr – 29 Apr 2026</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+</div>
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
+    
+    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col">
+        <label class="block text-[20px] font-black text-slate-700 uppercase tracking-widest mb-3 text-center">
+            Status Upload Berkas Per Kampus
+        </label>
+        <div class="max-h-[300px] overflow-y-auto border border-slate-100 rounded-xl">
+            <table class="w-full text-left border-collapse">
+                <thead class="sticky top-0 z-10 bg-slate-50 shadow-sm">
+                    <tr class="border-b border-slate-100">
+                        <th class="p-1 text-[11px] font-black text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-200" onclick="sortTable('upload', 'penerima')">Nama Universitas</th>
+                        <th class="p-1 text-[11px] font-black text-slate-500 uppercase tracking-wider text-center w-16 cursor-pointer hover:bg-slate-200" onclick="sortTable('upload', 'penerima')">Jumlah</th>
+                        <th class="p-1 text-[11px] font-black text-rose-500 uppercase tracking-wider text-center w-16 cursor-pointer hover:bg-slate-200" onclick="sortTable('upload', 'uploadBelum')">Belum</th>
+                        <th class="p-1 text-[11px] font-black text-emerald-600 uppercase tracking-wider text-center w-16 cursor-pointer hover:bg-slate-200" onclick="sortTable('upload', 'uploadSudah')">Sudah</th>
+                        <th class="p-1 text-[11px] font-black text-slate-500 uppercase tracking-wider text-center w-20 cursor-pointer hover:bg-slate-200" onclick="sortTable('upload', 'progUpload')">Progres</th>
+                    </tr>
+                </thead>
+                <tbody id="table-upload-body" class="divide-y divide-slate-50">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col">
+        <label class="block text-[20px] font-black text-slate-700 uppercase tracking-widest mb-3 text-center">
+            Status Verifikasi Per Kampus
+        </label>
+        <div class="max-h-[300px] overflow-y-auto border border-slate-100 rounded-xl">
+            <table class="w-full text-left border-collapse">
+                <thead class="sticky top-0 z-10 bg-slate-50 shadow-sm">
+                    <tr class="border-b border-slate-100">
+                        <th class="p-1 text-[11px] font-black text-slate-500 uppercase tracking-wider">Nama Universitas</th>
+                        <th class="p-1 text-[11px] font-black text-slate-500 uppercase tracking-wider text-center w-16 cursor-pointer hover:bg-slate-200" onclick="sortTable('verif', 'penerima')">Jumlah</th>
+                        <th class="p-1 text-[11px] font-black text-orange-500 uppercase tracking-wider text-center w-16 cursor-pointer hover:bg-slate-200" onclick="sortTable('verif', 'verifBelum')">Belum</th>
+                        <th class="p-1 text-[11px] font-black text-blue-600 uppercase tracking-wider text-center w-16 cursor-pointer hover:bg-slate-200" onclick="sortTable('verif', 'verifSudah')">Sudah</th>
+                        <th class="p-1 text-[11px] font-black text-slate-500 uppercase tracking-wider text-center w-20 cursor-pointer hover:bg-slate-200" onclick="sortTable('verif', 'progVerif')">Progres</th>
+                    </tr>
+                </thead>
+                <tbody id="table-verif-body" class="divide-y divide-slate-50">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // Update URL ke URL yang benar dari Mas Ilham
+        const SUPABASE_URL = 'https://fmbbktdjcsveihocgfjj.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtYmJrdGRqY3N2ZWlob2NnZmpqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5OTk5NzIsImV4cCI6MjA4ODU3NTk3Mn0.Esh5t2_gf16MO6ISxawYsoigOqSUl0-3oDi0SiSFzoQ';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        const TABLE_NAME = 'progres'; // Nama tabel baru
+        const PAGE_SIZE = 20;
+        let currentPage = 0;
+        let totalRows = 0;
+        let tsSelector;
+
+        const checkUpload = (status) => status !== "Verifikasi Lanjutan dan Upload Berkas";
+        const checkVerif = (status) => status === "Persetujuan Pimpinan Perguruan Tinggi";
+
+        async function updateStats() {
+            try {
+                let allStats = [];
+                let keepFetching = true;
+                let from = 0;
+                const step = 1000;
+
+                // Loop untuk ambil semua data (karena limit supabase 1000 per fetch)
+                while (keepFetching) {
+                    const { data, error } = await supabaseClient
+                        .from(TABLE_NAME)
+                        .select('NAMA_UNIVERSITAS, JenisPT, nm_status')
+                        .range(from, from + step - 1);
+
+                    if (error) {
+                        console.error("Fetch Loop Error:", error);
+                        break;
+                    }
+
+                    if (data && data.length > 0) {
+                        allStats = [...allStats, ...data];
+                        from += step;
+                        // Jika data yang didapat kurang dari step, berarti sudah habis
+                        if (data.length < step) keepFetching = false;
+                    } else {
+                        keepFetching = false;
+                    }
+                }
+
+                if (allStats.length === 0) return;
+
+                const totalMhs = allStats.length;
+
+                // Hitung Statistik Perguruan Tinggi (Unique)
+                const uniqueUnivs = new Set();
+                const ptnUnivs = new Set();
+                const ptsUnivs = new Set();
+
+                // Hitung Status Pendataan
+                let s1 = 0, s2 = 0, s3 = 0, s4 = 0;
+
+                allStats.forEach(row => {
+                    // Statistik Univ (tetap)
+                    if (row.NAMA_UNIVERSITAS) {
+                        uniqueUnivs.add(row.NAMA_UNIVERSITAS);
+                        if (row.JenisPT === "PTN") ptnUnivs.add(row.NAMA_UNIVERSITAS);
+                        if (row.JenisPT === "PTS") ptsUnivs.add(row.NAMA_UNIVERSITAS);
+                    }
+
+                    // --- LOGIKA BARU SESUAI REQUEST ---
+                    
+                    // 1. Upload Berkas (Data yang masih di tahap awal)
+                    if (row.nm_status === "Verifikasi Lanjutan dan Upload Berkas") {
+                        s1++;
+                    } 
+                    
+                    // 2. Verif Kampus (Semua yang sudah lewat tahap awal)
+                    if (row.nm_status !== "Verifikasi Lanjutan dan Upload Berkas") {
+                        s2++;
+                    }
+
+                    // 3. Persetujuan Pimpinan (Sekarang menghitung yang statusnya 'Verifikasi Perguruan Tinggi')
+                    if (row.nm_status === "Verifikasi Perguruan Tinggi") {
+                        s3++;
+                    }
+
+                    // 4. Verif Disdik (Sekarang menghitung yang statusnya 'Persetujuan Pimpinan Perguruan Tinggi')
+                    if (row.nm_status === "Persetujuan Pimpinan Perguruan Tinggi") {
+                        s4++;
+                    }
+                
+                });
+
+                // Update UI Statistik Pendataan
+                document.getElementById('stat-total-mhs').innerText = totalMhs.toLocaleString('id-ID');
+                document.getElementById('stat-total-univ').innerText = uniqueUnivs.size.toLocaleString('id-ID');
+                document.getElementById('stat-total-ptn').innerText = ptnUnivs.size.toLocaleString('id-ID');
+                document.getElementById('stat-total-pts').innerText = ptsUnivs.size.toLocaleString('id-ID');
+
+                // Update UI Status Pendataan
+                document.getElementById('count-upload').innerText = s1.toLocaleString('id-ID');
+                document.getElementById('count-kampus').innerText = s2.toLocaleString('id-ID');
+                document.getElementById('count-pimpinan').innerText = s3.toLocaleString('id-ID');
+                document.getElementById('count-disdik').innerText = s4.toLocaleString('id-ID');
+
+                // --- REVISI LOGIKA PERSENTASE ---
+
+                // 1. Progress Upload Berkas (Data yang sudah lewat tahap awal / Total Mahasiswa)
+                const sudahUpload = totalMhs - s1;
+                const p1 = totalMhs > 0 ? ((sudahUpload / totalMhs) * 100).toFixed(2) : "0.00";
+
+                // 2. Progress Verifikasi (REVISI: Persetujuan Pimpinan / Total Mahasiswa)
+                // Menghitung berapa banyak yang sudah di tahap Persetujuan Pimpinan dari total semua mahasiswa
+                const dataSetujuPimpinan = allStats.filter(r => r.nm_status === "Persetujuan Pimpinan Perguruan Tinggi").length;
+
+                // Rumus: (Persetujuan Pimpinan / Total Mahasiswa) * 100
+                const p2 = totalMhs > 0 ? ((dataSetujuPimpinan / totalMhs) * 100).toFixed(2) : "0.00";
+
+                // Update UI Angka Persen
+                document.getElementById('percent-upload').innerText = p1 + '%';
+                document.getElementById('percent-verif').innerText = p2 + '%';
+
+                // Update Lebar Batang Progres
+                document.getElementById('bar-upload').style.width = p1 + '%';
+                document.getElementById('bar-verif').style.width = p2 + '%';
+
+            // --- LOGIKA DUA TABEL (UPLOAD & VERIFIKASI) ---
+        const kampusMap = {};
+
+        allStats.forEach(row => {
+            const univ = row.NAMA_UNIVERSITAS || "TIDAK DIKETAHUI";
+            if (!kampusMap[univ]) {
+                kampusMap[univ] = { 
+                    penerima: 0, 
+                    uploadBelum: 0, 
+                    uploadSudah: 0,
+                    verifBelum: 0,
+                    verifSudah: 0
+                };
+            }
+
+            kampusMap[univ].penerima++;
+            
+            // Logika Tabel Upload (Box Kiri)
+            if (row.nm_status === "Verifikasi Lanjutan dan Upload Berkas") {
+                kampusMap[univ].uploadBelum++;
+            } else {
+                kampusMap[univ].uploadSudah++;
+            }
+
+            // Logika Tabel Verifikasi (Box Kanan)
+            if (row.nm_status === "Verifikasi Perguruan Tinggi") {
+                kampusMap[univ].verifBelum++;
+            } else if (row.nm_status === "Persetujuan Pimpinan Perguruan Tinggi") {
+                kampusMap[univ].verifSudah++;
+            }
+        });
+
+        const sortedUnivs = Object.keys(kampusMap).sort();
+        const tBodyUpload = document.getElementById('table-upload-body');
+        const tBodyVerif = document.getElementById('table-verif-body');
+
+        if (tBodyUpload && tBodyVerif) {
+            tBodyUpload.innerHTML = '';
+            tBodyVerif.innerHTML = '';
+
+            sortedUnivs.forEach(univ => {
+                const d = kampusMap[univ];
+                const progUpload = ((d.uploadSudah / d.penerima) * 100).toFixed(1);
+                const progVerif = d.penerima > 0 ? ((d.verifSudah / d.penerima) * 100).toFixed(1) : 0;
+
+                // Render Tabel Kiri (Upload) - Kolom nama dikasih class break-words biar rapi
+                tBodyUpload.insertAdjacentHTML('beforeend', `
+                    <tr class="hover:bg-slate-50 transition-colors border-b border-slate-50">
+                        <td class="py-1 px-3 text-[12px] font-bold text-slate-700 uppercase break-words">${univ}</td>
+                        <td class="py-1 px-3 text-[12px] font-black text-center w-16">${d.penerima}</td>
+                        <td class="py-1 px-3 text-[12px] font-black text-rose-600 text-center w-16">${d.uploadBelum}</td>
+                        <td class="py-1 px-3 text-[12px] font-black text-emerald-600 text-center w-16">${d.uploadSudah}</td>
+                        <td class="py-1 px-3 text-center w-20"><span class="text-[13px] font-black text-blue-600">${progUpload}%</span></td>
+                    </tr>
+                `);
+
+                // Render Tabel Kanan (Verifikasi)
+                tBodyVerif.insertAdjacentHTML('beforeend', `
+                    <tr class="hover:bg-slate-50 transition-colors border-b border-slate-50">
+                        <td class="py-1 px-3 text-[12px] font-bold text-slate-700 uppercase break-words">${univ}</td>
+                        <td class="py-1 px-3 text-[12px] font-black text-center w-16">${d.penerima}</td>
+                        <td class="py-1 px-3 text-[12px] font-black text-orange-500 text-center w-16">${d.verifBelum}</td>
+                        <td class="py-1 px-3 text-[12px] font-black text-blue-600 text-center w-16">${d.verifSudah}</td>
+                        <td class="py-1 px-3 text-center w-20"><span class="text-[13px] font-black text-emerald-600">${progVerif}%</span></td>
+                    </tr>
+                `);
+            });
+        }
+// ... (setelah loop allStats selesai) ...
+        globalKampusData = kampusMap; // Simpan ke global
+        renderTables(); // Panggil fungsi render
+    const loader = document.getElementById('global-loader');
+                if (loader) {
+                    loader.style.opacity = '0';
+                    setTimeout(() => {
+                        loader.style.display = 'none';
+                    }, 300); // 300ms itu biar transisinya halus
+                }
+
+            } catch (err) {
+                console.error("Gagal update stats:", err);
+                // Kalau error pun loader harus hilang biar gak nutupin layar terus
+                const loader = document.getElementById('global-loader');
+                if (loader) loader.style.display = 'none';
+            }
+        }
+// Simpan data secara global agar bisa di-sort ulang tanpa fetch ulang
+let globalKampusData = {};
+let sortDirections = {
+    upload: { key: '', dir: 'desc' },
+    verif: { key: '', dir: 'desc' }
+};
+
+// Fungsi Helper untuk Render Ulang Tabel
+function renderTables() {
+    const tBodyUpload = document.getElementById('table-upload-body');
+    const tBodyVerif = document.getElementById('table-verif-body');
+    if (!tBodyUpload || !tBodyVerif) return;
+
+    tBodyUpload.innerHTML = '';
+    tBodyVerif.innerHTML = '';
+
+    const univs = Object.keys(globalKampusData);
+
+    ['upload', 'verif'].forEach(type => {
+        const currentSort = sortDirections[type];
+        let sorted = [...univs];
+        
+        if (currentSort.key) {
+            sorted.sort((a, b) => {
+                let valA = globalKampusData[a][currentSort.key];
+                let valB = globalKampusData[b][currentSort.key];
+                if (currentSort.key.includes('prog')) {
+                    const k = currentSort.key === 'progUpload' ? 'uploadSudah' : 'verifSudah';
+                    valA = (globalKampusData[a][k] / globalKampusData[a].penerima);
+                    valB = (globalKampusData[b][k] / globalKampusData[b].penerima);
+                }
+                return currentSort.dir === 'desc' ? valB - valA : valA - valB;
+            });
+        }
+
+        sorted.forEach(univ => {
+            const d = globalKampusData[univ];
+            const pUp = ((d.uploadSudah / d.penerima) * 100).toFixed(1);
+            const pVe = d.penerima > 0 ? ((d.verifSudah / d.penerima) * 100).toFixed(1) : 0;
+
+            const rowHTML = type === 'upload' ? `
+                <tr class="hover:bg-slate-50 border-b border-slate-50 h-7">
+                    <td class="py-1 px-3 leading-none text-[12px] font-bold text-slate-700 uppercase break-words">${univ}</td>
+                    <td class="py-1 px-1 leading-none text-[12px] font-black text-center w-16">${d.penerima}</td>
+                    <td class="py-1 px-1 leading-none text-[12px] font-black text-rose-600 text-center w-16">${d.uploadBelum}</td>
+                    <td class="py-1 px-1 leading-none text-[12px] font-black text-emerald-600 text-center w-16">${d.uploadSudah}</td>
+                    <td class="py-1 px-1 leading-none text-center w-20"><span class="text-[13px] font-black text-blue-600">${pUp}%</span></td>
+                </tr>` : `
+                <tr class="hover:bg-slate-50 border-b border-slate-50 h-7">
+                    <td class="py-1 px-3 leading-none text-[12px] font-bold text-slate-700 uppercase break-words">${univ}</td>
+                    <td class="py-1 px-1 leading-none text-[12px] font-black text-center w-16">${d.penerima}</td>
+                    <td class="py-1 px-1 leading-none text-[12px] font-black text-orange-500 text-center w-16">${d.verifBelum}</td>
+                    <td class="py-1 px-1 leading-none text-[12px] font-black text-blue-600 text-center w-16">${d.verifSudah}</td>
+                    <td class="py-1 px-1 leading-none text-center w-20"><span class="text-[13px] font-black text-emerald-600">${pVe}%</span></td>
+                </tr>`;
+            
+            (type === 'upload' ? tBodyUpload : tBodyVerif).insertAdjacentHTML('beforeend', rowHTML);
+        });
+    });
+}
+
+// Fungsi Utama Sorting (Tri-State)
+function sortTable(type, key) {
+    const current = sortDirections[type];
+    
+    if (current.key === key) {
+        // Tri-state logic: desc -> asc -> desc
+        current.dir = current.dir === 'desc' ? 'asc' : 'desc';
+    } else {
+        current.key = key;
+        current.dir = 'desc'; // Default klik pertama selalu paling banyak
+    }
+    
+    renderTables();
+}
+
+        async function initFilters() {
+            try {
+                const { data, error } = await supabaseClient.from(TABLE_NAME).select('NAMA_UNIVERSITAS');
+                if (error) throw error;
+
+                const uniqueUniv = [...new Set(data.filter(i => i.NAMA_UNIVERSITAS).map(item => item.NAMA_UNIVERSITAS))].sort();
+                const selectEl = document.getElementById('uni-filter');
+                selectEl.innerHTML = '<option value="">Semua Perguruan Tinggi...</option>';
+                uniqueUniv.forEach(u => { 
+                    const opt = document.createElement('option'); 
+                    opt.value = u; 
+                    opt.textContent = u; 
+                    selectEl.appendChild(opt); 
+                });
+
+                if(tsSelector) tsSelector.destroy();
+                tsSelector = new TomSelect("#uni-filter", { 
+                    create: false, 
+                    onChange: () => { currentPage = 0; fetchData(); } 
+                });
+            } catch (e) { console.error("Filter Error:", e); }
+        }
+
+        async function fetchData() {
+            const body = document.getElementById('data-table-body');
+            const loading = document.getElementById('loading');
+            const empty = document.getElementById('empty');
+            
+            body.innerHTML = ''; 
+            loading.classList.remove('hidden'); 
+            empty.classList.add('hidden');
+
+            const selectedUni = document.getElementById('uni-filter').value;
+            const fUpload = document.getElementById('filter-upload').value; 
+            const fVerif = document.getElementById('filter-verif').value;   
+            
+            const start = currentPage * PAGE_SIZE;
+            const end = start + PAGE_SIZE - 1;
+
+            let query = supabaseClient.from(TABLE_NAME).select('*', { count: 'exact' });
+
+            if (selectedUni) query = query.eq('NAMA_UNIVERSITAS', selectedUni);
+
+            if (fUpload === 'SUDAH') {
+                query = query.neq('nm_status', 'Verifikasi Lanjutan dan Upload Berkas');
+            } else if (fUpload === 'BELUM') {
+                query = query.eq('nm_status', 'Verifikasi Lanjutan dan Upload Berkas');
+            }
+
+            if (fVerif === 'SUDAH') {
+                query = query.eq('nm_status', 'Persetujuan Pimpinan Perguruan Tinggi');
+            } else if (fVerif === 'BELUM') {
+                query = query.neq('nm_status', 'Persetujuan Pimpinan Perguruan Tinggi');
+            }
+
+            const { data, error, count } = await query.order('NAMA_SISWA', { ascending: true }).range(start, end);
+
+            loading.classList.add('hidden');
+            if (error || !data || data.length === 0) { 
+                empty.classList.remove('hidden'); 
+                return; 
+            }
+
+            totalRows = count || 0;
+            document.getElementById('total-data-text').innerText = totalRows.toLocaleString();
+            document.getElementById('data-count-text').innerText = data.length;
+            document.getElementById('prev-btn').disabled = (currentPage === 0);
+            document.getElementById('next-btn').disabled = (end >= totalRows - 1);
+            
+            renderPageNumbers();
+
+            body.innerHTML = data.map((row, index) => {
+                const isUploadDone = checkUpload(row.nm_status);
+                const isVerifDone = checkVerif(row.nm_status);
+                
+                return `
+                <tr class="hover:bg-slate-50 transition-all border-b border-slate-50">
+                    <td data-label="No" class="text-center font-black text-slate-400 text-xs">${start + index + 1}</td>
+                    <td data-label="Mahasiswa" class="px-5">
+                        <div class="font-black text-slate-800 uppercase leading-tight text-[14px] not-italic">${row.NAMA_SISWA || '-'}</div>
+                        <div class="text-[11px] text-slate-400 font-black mt-1 not-italic">NIM: ${row.NIM || '-'}</div>
+                    </td>
+                    <td data-label="Perguruan Tinggi" class="px-5 text-blue-700 font-bold text-[13px] not-italic">${row.NAMA_UNIVERSITAS || '-'}</td>
+                    <td data-label="Program Studi" class="px-5 text-slate-600 text-[13px] not-italic">${row.PRODI || '-'}</td>
+                    <td data-label="Status PT" class="text-center">
+                        <span class="px-3 py-1 bg-slate-100 rounded-full text-[10px] font-bold text-slate-500 not-italic uppercase">${row.JenisPT || '-'}</span>
+                    </td>
+                    <td data-label="Upload Berkas" class="text-center px-3">
+                        <span class="block w-full py-2 rounded-lg text-[11px] font-black tracking-widest not-italic ${isUploadDone ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}">
+                            ${isUploadDone ? 'SUDAH' : 'BELUM'}
+                        </span>
+                    </td>
+                    <td data-label="Verif Kampus" class="text-center px-3">
+                        <span class="block w-full py-2 rounded-lg text-[11px] font-black tracking-widest not-italic ${isVerifDone ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}">
+                            ${isVerifDone ? 'SUDAH' : 'BELUM'}
+                        </span>
+                    </td>
+                </tr>`;
+            }).join('');
+        } // <--- Penutup fetchData tadi ilang di sini
+
+        function renderPageNumbers() {
+            const container = document.getElementById('pagination-numbers');
+            container.innerHTML = '';
+            const totalPages = Math.ceil(totalRows / PAGE_SIZE);
+            if(totalPages <= 1) return;
+            let start = Math.max(0, currentPage - 1);
+            let end = Math.min(totalPages, start + 3);
+            for (let i = start; i < end; i++) {
+                const btn = document.createElement('button');
+                btn.innerText = i + 1;
+                btn.className = `px-3 py-1.5 rounded-lg text-xs font-bold ${i === currentPage ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600'}`;
+                btn.onclick = () => { currentPage = i; fetchData(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+                container.appendChild(btn);
+            }
+        } // <--- Penutup renderPageNumbers tadi juga ilang
+
+        function changePage(delta) {
+            currentPage += delta;
+            fetchData();
+        }
+
+        async function downloadExcel() {
+            const btn = document.getElementById('download-btn');
+            if (!btn) return;
+            btn.innerText = "LOADING..."; 
+            btn.disabled = true;
+
+            try {
+                const selectedUni = document.getElementById('uni-filter').value;
+                const fUpload = document.getElementById('filter-upload').value;
+                const fVerif = document.getElementById('filter-verif').value;
+
+                let query = supabaseClient.from(TABLE_NAME).select('*');
+                if (selectedUni) query = query.eq('NAMA_UNIVERSITAS', selectedUni);
+                
+                if (fUpload === 'SUDAH') query = query.neq('nm_status', 'Verifikasi Lanjutan dan Upload Berkas');
+                if (fUpload === 'BELUM') query = query.eq('nm_status', 'Verifikasi Lanjutan dan Upload Berkas');
+                if (fVerif === 'SUDAH') query = query.eq('nm_status', 'Persetujuan Pimpinan Perguruan Tinggi');
+                if (fVerif === 'BELUM') query = query.neq('nm_status', 'Persetujuan Pimpinan Perguruan Tinggi');
+
+                const { data, error } = await query;
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    const exportData = data.map(row => ({
+                        "NAMA MAHASISWA": row.NAMA_SISWA,
+                        "NIM": row.NIM,
+                        "UNIVERSITAS": row.NAMA_UNIVERSITAS,
+                        "PRODI": row.PRODI,
+                        "BERKAS": checkUpload(row.nm_status) ? "SUDAH" : "BELUM",
+                        "VERIF KAMPUS": checkVerif(row.nm_status) ? "SUDAH" : "BELUM",
+                        "STATUS SISTEM": row.nm_status
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(exportData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "Progress");
+                    XLSX.writeFile(wb, `Laporan_Progres_${new Date().getTime()}.xlsx`);
+                } else {
+                    alert("Tidak ada data untuk diunduh");
+                }
+            } catch (err) {
+                console.error("Download error:", err);
+                alert("Gagal mengunduh berkas");
+            } finally {
+                btn.innerText = "DOWNLOAD EXCEL"; 
+                btn.disabled = false;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => { 
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const today = new Date().toLocaleDateString('id-ID', options);
+            const dateEl = document.getElementById('current-date');
+            if(dateEl) dateEl.innerText = today;
+            
+            initFilters(); 
+            fetchData(); 
+            updateStats(); 
+        });
+    </script>
+</body>
+</html>
+
+
