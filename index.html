@@ -115,11 +115,11 @@ th { vertical-align: middle !important; text-align: center !important; font-size
     <p class="mt-4 text-slate-900 font-black uppercase tracking-widest text-xs animate-pulse">Memuat Data...</p>
 </div>
     <div class="max-w-[1600px] mx-auto px-6 py-8">
-        <div class="flex flex-col lg:flex-row justify-between items-center gap-8 mb-10">
+        <div class="flex flex-col lg:flex-row justify-between items-center gap-8 mb-4">
             <div class="flex items-center gap-7 w-full lg:w-auto">
                 <img src="https://i.imgur.com/7QcgJj0.png" alt="Logo" class="hidden lg:block h-20 w-auto object-contain">
-                <div class="mb-10">
-                    <h1 class="text-3xl font-black text-slate-900 tracking-tighter uppercase">
+                <div class="mb-4">
+                    <h1 class="text-4xl font-black text-slate-900 tracking-tighter uppercase">
                         Dashboard Monitoring Pendataan
                     </h1>
                     <div class="flex flex-col md:flex-row md:items-center gap-2 mt-1">
@@ -259,6 +259,42 @@ th { vertical-align: middle !important; text-align: center !important; font-size
 
             </div>
         </div>
+</div>
+<div class="bg-white rounded-2xl p-8 shadow-sm border-2 border-rose-500 mb-6 overflow-hidden relative">
+    
+    <div class="flex flex-col md:flex-row items-center justify-center gap-0">
+        
+        <div class="w-full md:w-1/2 pr-0 md:pr-10 text-center md:text-right border-b md:border-b-0 md:border-r border-slate-900/10 pb-6 md:pb-0">
+            <h3 class="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tighter leading-tight">
+                Sisa Waktu Unggah Berkas<br class="hidden md:block"> Administrasi Bansos
+            </h3>
+            <p class="text-xs md:text-sm font-bold text-slate-400 uppercase tracking-widest mt-2">
+                Batas Akhir: 27 Maret 2026, Pukul 23:59 WIB
+            </p>
+        </div>
+
+        <div class="w-full md:w-1/2 pl-0 md:pl-10 pt-6 md:pt-0 flex justify-center md:justify-start">
+            <div class="flex gap-4 md:gap-6">
+                <div class="flex flex-col items-center min-w-[65px] md:min-w-[80px]">
+                    <span id="cd-days" class="text-3xl md:text-5xl font-black text-rose-600 leading-none">00</span>
+                    <span class="text-[11px] md:text-[15px] font-extrabold text-slate-400 uppercase mt-2 tracking-widest">Hari</span>
+                </div>
+                <div class="flex flex-col items-center min-w-[65px] md:min-w-[80px]">
+                    <span id="cd-hours" class="text-3xl md:text-5xl font-black text-slate-800 leading-none">00</span>
+                    <span class="text-[11px] md:text-[15px] font-extrabold text-slate-400 uppercase mt-2 tracking-widest">Jam</span>
+                </div>
+                <div class="flex flex-col items-center min-w-[65px] md:min-w-[80px]">
+                    <span id="cd-minutes" class="text-3xl md:text-5xl font-black text-slate-800 leading-none">00</span>
+                    <span class="text-[11px] md:text-[15px] font-extrabold text-slate-400 uppercase mt-2 tracking-widest">Menit</span>
+                </div>
+                <div class="flex flex-col items-center min-w-[65px] md:min-w-[80px]">
+                    <span id="cd-seconds" class="text-3xl md:text-5xl font-black text-slate-800 leading-none">00</span>
+                    <span class="text-[11px] md:text-[15px] font-extrabold text-slate-400 uppercase mt-2 tracking-widest">Detik</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
 </div>
 <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
     
@@ -769,6 +805,36 @@ function sortTable(type, key) {
             fetchData(); 
             updateStats(); 
         });
+function startCountdown() {
+    const targetDate = new Date("March 27, 2026 23:59:59").getTime();
+
+    const timer = setInterval(() => {
+        const now = new Date().getTime();
+        const distance = targetDate - now;
+
+        if (distance < 0) {
+            clearInterval(timer);
+            document.querySelectorAll("[id^='cd-']").forEach(el => el.innerText = "00");
+            return;
+        }
+
+        const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+        document.getElementById("cd-days").innerText = days.toString().padStart(2, '0');
+        document.getElementById("cd-hours").innerText = hours.toString().padStart(2, '0');
+        document.getElementById("cd-minutes").innerText = minutes.toString().padStart(2, '0');
+        document.getElementById("cd-seconds").innerText = seconds.toString().padStart(2, '0');
+    }, 1000);
+}
+
+// Panggil di akhir DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => { 
+    // ... panggil fungsi lainnya ...
+    startCountdown(); 
+});
     </script>
 </body>
 </html>
